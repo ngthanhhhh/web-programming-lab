@@ -1,58 +1,127 @@
+using backend.Data;
+using backend.DTOs;
 using backend.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace backend.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/products")]
 public class ProductsController : ControllerBase
 {
-    private static List<Product> _products = new List<Product>
+    private readonly MyDbContext _context;
+
+    public ProductsController(MyDbContext context)
     {
-        new Product {Id = 1, Name = "Son môi lì", Price = 200000, Description = "Son môi lì, lâu trôi, cao cấp", Stock = 10},
-        new Product {Id = 2, Name = "Kem dưỡng da", Price = 350000, Description = "Kem dưỡng da mờ thâm, mịn da", Stock = 20},
-        new Product {Id = 3, Name = "Nước hoa hồng", Price = 400000, Description = "Nước hoa hồng cấp ẩm cho da", Stock = 10},
-        new Product {Id = 4, Name = "Phấn má", Price = 450000, Description = "Phấn má cao cấp, mịn", Stock = 15}         
-    };
+        _context = context;
+    }
 
     [HttpGet]
-    public IActionResult GetAll() => Ok(_products);
+    public async Task<IActionResult> GetAll()
+    {
+        var products = await _context.Products.ToListAsync();
+        return Ok(products);
+    }
 
     [HttpGet("{id}")]
-    public IActionResult GetById(int id)
+    public async Task<IActionResult>GetById(int id)
     {
-        var product = _products.Find(p => p.Id == id);
+        var product = await _context.Products.FindAsync(id);
         return product == null ? NotFound() : Ok(product);
     }
 
     [HttpPost]
-    public IActionResult Create(Product product)
+    public async Task<IActionResult> Create([FromForm] ProductCreateRequest request)
     {
-        product.Id = _products.Count > 0 ? _products.Max(p => p.Id) + 1 : 1;
-        _products.Add(product);
-        return CreatedAtAction(
-            nameof(GetById), //gọi API nào để lấy lại
-            new {id = product.Id}, //truyền param cho URL
-            product //data trả về
-        );
-    } 
+        var imageUrl = await SaveImageAsync(request.Image);
+        var product = new Product{
+            Name = request.Name,
+            Price = request.Price,
+            Description = request.Description,
+            Stock = request.Stock,
+            ImageUrl = imageUrl
+        };
+
+        _context.Products.Add(product);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetById),
+                                new {id = product.Id},
+                                product);
+    }
 
     [HttpPut("{id}")]
-    public IActionResult Update(int id, Product product)
+    public async Task<IActionResult> Update(int id, [FromForm] ProductUpdateRequest request)
     {
-        var index = _products.FindIndex(p => p.Id == id);
-        if (index == -1) return NotFound();
+        var existingProduct = await _context.Products.FindAsync(id);
+        if (existingProduct == null) return NotFound();
 
-        product.Id = id;
-        _products[index] = product;
-        return Ok(product);
+        existingProduct.Name = request.Name;
+        existingProduct.Price = request.Price;
+
+        existingProduct.Description = request.Description;
+        existingProduct.Stock = request.Stock;
+
+        if (request.Image != null && request.Image.Length > 0)
+        {
+            existingProduct.ImageUrl = await SaveImageAsync(request.Image);
+        } 
+
+        await _context.SaveChangesAsync();
+
+        return Ok(existingProduct);
     }
 
     [HttpDelete("{id}")]
-    public IActionResult Delete(int id)
+    public async Task<IActionResult> Delete(int id)
     {
-        var product = _products.Find(p => p.Id == id);
+        var product = await _context.Products.FindAsync(id);
         if (product == null) return NotFound();
 
-        _products.Remove(product);
+        if (!string.IsNullOrEmpty(product.ImageUrl))
+        {
+            var filePath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "wwwroot",
+                product.ImageUrl.TrimStart('/') // bỏ dấu /
+            );
+
+            if (System.IO.File.Exists(filePath))
+            {
+                System.IO.File.Delete(filePath);
+            }
+        }
+
+        _context.Products.Remove(product);
+        await _context.SaveChangesAsync();
+        
         return NoContent();
+    }
+
+    private async Task<string> SaveImageAsync(IFormFile ? image)
+    {
+        if (image == null || image.Length == 0)
+        {
+            return "";
+        }
+
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+        var extension = Path.GetExtension(image.FileName).ToLower();
+
+        if (!allowedExtensions.Contains(extension))
+        {
+            throw new Exception("File ảnh không hợp lệ");
+        }
+
+        var fileName = $"{Guid.NewGuid()}{extension}";
+        var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "products");
+
+        Directory.CreateDirectory(folderPath);
+        var filePath = Path.Combine(folderPath, fileName);
+
+        using var stream = new FileStream(filePath, FileMode.Create);
+        await image.CopyToAsync(stream);
+        return $"/images/products/{fileName}";
     }
 }

@@ -183,6 +183,46 @@ body {
   transform: scale(0.95);
 }
 
+.product-form {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin: 20px 0 30px;
+}
+
+.product-form input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+}
+
+.product-form button,
+.product-actions button {
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background: #1f2937;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.product-form button:hover,
+.product-actions button:hover {
+  background: #fa3f93;
+}
+.product-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.product-actions button {
+  flex: 1;
+}
+.product-item {
+  display: flex;
+  flex-direction: column;
+}
 /* FOOTER */
 .footer {
   text-align: center;
